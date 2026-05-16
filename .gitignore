@@ -1,0 +1,22 @@
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python (skill scripts, tooling)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (in case)
+node_modules/
+
+# Build / temp
+*.bak
+*.tmp
+*.log

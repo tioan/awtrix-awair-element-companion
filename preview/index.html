@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Awair Element Awtrix Companion — Preview</title>
+<style>
+  :root {
+    --bg: #0b0c0f;
+    --panel: #15171c;
+    --text: #e6e6e6;
+    --muted: #8a8e96;
+    --border: #23262d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    display: grid; gap: 24px; place-items: center;
+  }
+  h1 { font-size: 18px; font-weight: 500; margin: 0; }
+  .matrix-frame {
+    background: #000; padding: 16px;
+    border-radius: 18px; border: 1px solid var(--border);
+    box-shadow: 0 0 0 6px #14161b inset, 0 12px 40px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  canvas.matrix {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border-radius: 4px;
+    background: #000;
+  }
+  .panel {
+    background: var(--panel); padding: 18px 22px;
+    border-radius: 14px; border: 1px solid var(--border);
+    width: min(720px, 100%);
+    display: grid; gap: 14px;
+  }
+  .row {
+    display: grid; grid-template-columns: 110px 1fr 64px 56px;
+    align-items: center; gap: 12px;
+  }
+  .row label { font-size: 13px; color: var(--muted); }
+  .row .val { font-variant-numeric: tabular-nums; text-align: right; font-size: 13px; }
+  .row .lvl {
+    text-align: center; font-size: 12px; padding: 2px 8px;
+    border-radius: 999px; font-weight: 500;
+  }
+  input[type=range] { width: 100%; accent-color: #4ADE80; }
+  details { font-size: 12px; color: var(--muted); }
+  details summary { cursor: pointer; }
+  pre {
+    background: #0a0b0e; padding: 12px; border-radius: 8px;
+    border: 1px solid var(--border); overflow: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px; color: #cfd2d8; max-height: 240px;
+  }
+  .legend {
+    display: flex; gap: 14px; font-size: 12px; color: var(--muted);
+    flex-wrap: wrap; justify-content: center;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .app-tabs {
+    display: flex; gap: 8px; align-items: center;
+    background: var(--panel); padding: 8px 12px; border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .app-tabs span { font-size: 12px; color: var(--muted); }
+  .app-tabs button {
+    background: transparent; color: var(--text); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 14px; font-size: 12px; cursor: pointer;
+  }
+  .app-tabs button.active { background: #4ADE80; color: #000; border-color: #4ADE80; }
+  .app-label {
+    font-size: 11px; color: var(--muted); margin-top: 8px; text-align: center;
+  }
+  .scroll-text {
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 80px; line-height: 1; white-space: nowrap;
+    will-change: transform;
+  }
+</style>
+</head>
+<body>
+
+<h1>Awair Element Awtrix Companion — Live Preview</h1>
+
+<div class="app-tabs">
+  <span>Awtrix app:</span>
+  <button data-app="dots" class="active">App 1 — Dots</button>
+  <button data-app="text">App 2 — Scrolling text</button>
+  <button data-app="rotate">▶ Auto-rotate</button>
+</div>
+
+<div class="matrix-frame">
+  <div id="canvas-wrap">
+    <canvas id="matrix-dots" class="matrix" width="32" height="8" style="width: 640px; height: 160px;"></canvas>
+    <div id="matrix-text-wrap" style="display:none; width: 640px; height: 160px; overflow: hidden; background: #000; border-radius: 4px;">
+      <div id="matrix-text" class="scroll-text">Score 85  Temp 22C  Hum 45%  CO2 750  VOC 250  PM 8</div>
+    </div>
+  </div>
+</div>
+<div class="app-label" id="app-label">App 1: awair — pure dot bars + score (8s)</div>
+
+<div class="legend">
+  <span><i class="swatch" style="background:#4ADE80"></i>L1 good</span>
+  <span><i class="swatch" style="background:#FACC15"></i>L2 fair</span>
+  <span><i class="swatch" style="background:#FB923C"></i>L3 poor</span>
+  <span><i class="swatch" style="background:#EF4444"></i>L4 bad</span>
+  <span><i class="swatch" style="background:#A855F7"></i>L5 severe</span>
+</div>
+
+<div class="panel" id="controls"></div>
+
+<div class="panel">
+  <details>
+    <summary>MQTT payloads (App 1 + App 2)</summary>
+    <pre id="payload"></pre>
+  </details>
+</div>
+
+<script>
+  // ---------- config (mirrors the HA template) ----------
+  const PALETTE = ['#4ADE80', '#FACC15', '#FB923C', '#EF4444', '#A855F7'];
+  const DIM = '#101010';
+  const LABEL_COLOR = '#888888';
+
+  const SENSORS = [
+    { key: 't',  label: 'Temp',     unit: 'C',   shortLbl: 'Temp', min: 5,    max: 40,    step: 0.5, value: 22,   th: [18, 20, 25, 27],          sym: true,  decimals: 0 },
+    { key: 'h',  label: 'Humidity', unit: '%',   shortLbl: 'Hum',  min: 0,    max: 100,   step: 1,   value: 45,   th: [30, 40, 60, 65],          sym: true,  decimals: 0 },
+    { key: 'c',  label: 'CO₂',      unit: 'ppm', shortLbl: 'CO2',  min: 400,  max: 6000,  step: 10,  value: 750,  th: [600, 1000, 2000, 4500],   sym: false, decimals: 0 },
+    { key: 'v',  label: 'TVOC',     unit: 'ppb', shortLbl: 'VOC',  min: 0,    max: 30000, step: 10,  value: 250,  th: [300, 500, 3000, 25000],   sym: false, decimals: 0 },
+    { key: 'p',  label: 'PM2.5',    unit: '',    shortLbl: 'PM',   min: 0,    max: 200,   step: 1,   value: 8,    th: [12, 35, 55, 150],         sym: false, decimals: 0 }
+  ];
+  let score = 85;
+  let activeApp = 'dots';
+  let rotateTimer = null;
+
+  const levelLin = (v, t) => v < t[0] ? 1 : v < t[1] ? 2 : v < t[2] ? 3 : v < t[3] ? 4 : 5;
+  function levelSym(v, t) {
+    if (v >= t[1] && v <= t[2]) return 1;
+    if ((v >= t[0] && v < t[1]) || (v > t[2] && v <= t[3])) return 2;
+    const ls = (t[1] - t[0]) || 1, hs = (t[3] - t[2]) || 1;
+    if (v < t[0]) return v >= t[0] - ls ? 3 : v >= t[0] - 2*ls ? 4 : 5;
+    return v <= t[3] + hs ? 3 : v <= t[3] + 2*hs ? 4 : 5;
+  }
+  const scoreLevel = s => s >= 80 ? 1 : s >= 60 ? 2 : s >= 40 ? 3 : s >= 20 ? 4 : 5;
+
+  const DIGITS = {
+    '0':['111','101','101','101','111'],'1':['010','110','010','010','111'],
+    '2':['111','001','111','100','111'],'3':['111','001','111','001','111'],
+    '4':['101','101','111','001','001'],'5':['111','100','111','001','111'],
+    '6':['111','100','111','101','111'],'7':['111','001','010','010','010'],
+    '8':['111','101','111','101','111'],'9':['111','101','111','001','111']
+  };
+
+  function buildDotsPayload() {
+    const sLvl = scoreLevel(score);
+    const sColor = PALETTE[sLvl - 1];
+    const draw = [];
+    const scoreDisp = score >= 100 ? 99 : score;
+    let cur = 1;
+    for (const ch of String(scoreDisp)) {
+      const g = DIGITS[ch]; if (!g) { cur += 4; continue; }
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++)
+        if (g[r][c] === '1') draw.push({ dp: [cur + c, 1 + r, sColor] });
+      cur += 4;
+    }
+    SENSORS.forEach((s, i) => {
+      const lvl = s.sym ? levelSym(s.value, s.th) : levelLin(s.value, s.th);
+      const col = 11 + i * 4;
+      for (let dot = 0; dot < 5; dot++) {
+        const row = 5 - dot;
+        const lit = (dot + 1) <= lvl;
+        draw.push({ df: [col, row, 2, 1, lit ? PALETTE[dot] : DIM] });
+      }
+    });
+    const barW = Math.ceil(score / 100 * 32);
+    if (barW > 0) draw.push({ df: [0, 7, barW, 1, sColor] });
+    if (barW < 32) draw.push({ df: [barW, 7, 32 - barW, 1, DIM] });
+    return { text: '', noScroll: true, duration: 8, lifetime: 180, lifetimeMode: 0, draw };
+  }
+
+  function buildTextPayload() {
+    const seg = [];
+    const sColor = PALETTE[scoreLevel(score) - 1];
+    seg.push({ t: 'Score ', c: LABEL_COLOR });
+    seg.push({ t: String(score), c: sColor });
+    SENSORS.forEach(s => {
+      const lvl = s.sym ? levelSym(s.value, s.th) : levelLin(s.value, s.th);
+      const c = PALETTE[lvl - 1];
+      const v = s.decimals === 0 ? Math.round(s.value) : s.value.toFixed(s.decimals);
+      seg.push({ t: '  ' + s.shortLbl + ' ', c: LABEL_COLOR });
+      seg.push({ t: v + s.unit, c });
+    });
+    return { text: seg, duration: 12, lifetime: 180, lifetimeMode: 0, scrollSpeed: 90, repeat: 1 };
+  }
+
+  // ---------- canvas renderer ----------
+  const canvas = document.getElementById('matrix-dots');
+  const ctx = canvas.getContext('2d');
+  function renderDots() {
+    const payload = buildDotsPayload();
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 32, 8);
+    for (const cmd of payload.draw) {
+      if (cmd.df) { const [x, y, w, h, color] = cmd.df; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); }
+      else if (cmd.dp) { const [x, y, color] = cmd.dp; ctx.fillStyle = color; ctx.fillRect(x, y, 1, 1); }
+    }
+  }
+
+  // ---------- text renderer (animated scroll) ----------
+  const textWrap = document.getElementById('matrix-text-wrap');
+  const textEl = document.getElementById('matrix-text');
+  let scrollPos = 640;
+  let scrollAnim = null;
+
+  function renderText() {
+    const payload = buildTextPayload();
+    textEl.innerHTML = '';
+    payload.text.forEach(seg => {
+      const span = document.createElement('span');
+      span.style.color = seg.c;
+      span.textContent = seg.t;
+      textEl.appendChild(span);
+    });
+  }
+
+  function startScroll() {
+    if (scrollAnim) cancelAnimationFrame(scrollAnim);
+    scrollPos = 640;
+    const w = textEl.scrollWidth;
+    function step() {
+      scrollPos -= 2;
+      if (scrollPos < -w) scrollPos = 640;
+      textEl.style.transform = 'translateX(' + scrollPos + 'px)';
+      scrollAnim = requestAnimationFrame(step);
+    }
+    step();
+  }
+  function stopScroll() { if (scrollAnim) { cancelAnimationFrame(scrollAnim); scrollAnim = null; } }
+
+  function showApp(name) {
+    activeApp = name;
+    document.querySelectorAll('.app-tabs button').forEach(b => b.classList.toggle('active', b.dataset.app === name));
+    if (name === 'dots') {
+      canvas.style.display = 'block';
+      textWrap.style.display = 'none';
+      stopScroll();
+      document.getElementById('app-label').textContent = 'App 1: awair — pure dot bars + score (8s)';
+      renderDots();
+    } else if (name === 'text') {
+      canvas.style.display = 'none';
+      textWrap.style.display = 'block';
+      renderText();
+      startScroll();
+      document.getElementById('app-label').textContent = 'App 2: awair_text — scrolling text with values (~12s)';
+    } else if (name === 'rotate') {
+      let phase = 'dots';
+      const tick = () => {
+        if (phase === 'dots') {
+          showAppOnce('dots');
+          rotateTimer = setTimeout(() => { phase = 'text'; tick(); }, 4000);
+        } else {
+          showAppOnce('text');
+          rotateTimer = setTimeout(() => { phase = 'dots'; tick(); }, 6000);
+        }
+      };
+      tick();
+      document.querySelectorAll('.app-tabs button').forEach(b => b.classList.toggle('active', b.dataset.app === 'rotate'));
+    }
+  }
+
+  function showAppOnce(name) {
+    if (name === 'dots') {
+      canvas.style.display = 'block';
+      textWrap.style.display = 'none';
+      stopScroll();
+      document.getElementById('app-label').textContent = 'Auto-rotate · App 1: awair';
+      renderDots();
+    } else {
+      canvas.style.display = 'none';
+      textWrap.style.display = 'block';
+      renderText();
+      startScroll();
+      document.getElementById('app-label').textContent = 'Auto-rotate · App 2: awair_text';
+    }
+  }
+
+  document.querySelectorAll('.app-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (rotateTimer) { clearTimeout(rotateTimer); rotateTimer = null; }
+      showApp(btn.dataset.app);
+    });
+  });
+
+  // ---------- controls ----------
+  const ctrls = document.getElementById('controls');
+  function levelBadge(lvl) {
+    const c = PALETTE[lvl - 1];
+    return `<span class="lvl" style="background:${c}1f;color:${c}">L${lvl}</span>`;
+  }
+  function buildControls() {
+    ctrls.innerHTML = '';
+    const scoreRow = document.createElement('div');
+    scoreRow.className = 'row';
+    scoreRow.innerHTML = `
+      <label>Score (0–99)</label>
+      <input type="range" min="0" max="99" step="1" value="${score}" id="ctl-score">
+      <span class="val" id="val-score">${score}</span>
+      <span id="lvl-score">${levelBadge(scoreLevel(score))}</span>
+    `;
+    ctrls.appendChild(scoreRow);
+    document.getElementById('ctl-score').addEventListener('input', e => {
+      score = +e.target.value;
+      document.getElementById('val-score').textContent = score;
+      document.getElementById('lvl-score').innerHTML = levelBadge(scoreLevel(score));
+      updateAll();
+    });
+    SENSORS.forEach(s => {
+      const row = document.createElement('div'); row.className = 'row';
+      const lvl = s.sym ? levelSym(s.value, s.th) : levelLin(s.value, s.th);
+      row.innerHTML = `
+        <label>${s.label}</label>
+        <input type="range" min="${s.min}" max="${s.max}" step="${s.step}" value="${s.value}" id="ctl-${s.key}">
+        <span class="val" id="val-${s.key}">${s.value} ${s.unit}</span>
+        <span id="lvl-${s.key}">${levelBadge(lvl)}</span>
+      `;
+      ctrls.appendChild(row);
+      document.getElementById('ctl-' + s.key).addEventListener('input', e => {
+        s.value = +e.target.value;
+        document.getElementById('val-' + s.key).textContent = `${s.value} ${s.unit}`;
+        const newLvl = s.sym ? levelSym(s.value, s.th) : levelLin(s.value, s.th);
+        document.getElementById('lvl-' + s.key).innerHTML = levelBadge(newLvl);
+        updateAll();
+      });
+    });
+  }
+
+  function updateAll() {
+    if (activeApp === 'dots') renderDots();
+    else if (activeApp === 'text') renderText();
+    else { renderDots(); renderText(); }
+    document.getElementById('payload').textContent =
+      '// App 1 — awair\n' + JSON.stringify(buildDotsPayload(), null, 2) +
+      '\n\n// App 2 — awair_text\n' + JSON.stringify(buildTextPayload(), null, 2);
+  }
+
+  buildControls();
+  showApp('dots');
+  updateAll();
+</script>
+</body>
+</html>

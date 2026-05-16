@@ -1,0 +1,344 @@
+# =====================================================================
+# Awair Element Awtrix Companion  —  Air-Dots-Card style for the Awtrix 3 LED matrix
+# =====================================================================
+#
+# Two custom apps that cycle in the Awtrix app loop:
+#
+#   App 1  —  awair         pure dot bars + score, static
+#   App 2  —  awair_text    scrolling line with all values, color-coded
+#
+# Drop this file into:  /config/packages/awair-companion.package.yaml
+# and make sure  /config/configuration.yaml  contains:
+#
+#     homeassistant:
+#       packages: !include_dir_named packages
+#
+# Then EDIT the input_text helpers below (or via UI → Helpers) to point
+# at YOUR Awtrix MQTT prefix.
+#
+# Layout of App 1 (32x8 matrix):
+#
+#     col:   0 . . . . . . . . . 10 . . . . 15 . . . . 20 . . . . 25 . . . . 30 .
+#     row 0  . . . . . . . . . . .  . . . . .  . . . . .  . . . . .  . . . . .  .
+#     row 1  . S S S . S S S . . .  P P . . P  P . . P P  . . P P .  . P P . .  .   ← purple (worst)
+#     row 2  . S . . . S . S . . .  R R . . R  R . . R R  . . R R .  . R R . .  .
+#     row 3  . S S S . S S S . . .  O O . . O  O . . O O  . . O O .  . O O . .  .
+#     row 4  . S . . . . . S . . .  Y Y . . Y  Y . . Y Y  . . Y Y .  . Y Y . .  .
+#     row 5  . S S S . S S S . . .  G G . . G  G . . G G  . . G G .  . G G . .  .   ← green (best)
+#     row 6  . . . . . . . . . . .  . . . . .  . . . . .  . . . . .  . . . . .  .
+#     row 7  ▓ ▓ ▓ ▓ ▓ ▓ ▓ ▓ ▓ ▓ ▓  ▓ ▓ ▓ ▓ ▓  . . . . .  . . . . .  . . . . .  .   ← score progress bar
+#
+# App 2 scrolls e.g.:
+#     "Score 85  Temp 22C  Hum 45%  CO2 750  VOC 250  PM 8"
+# with each value tinted by its severity.
+#
+# =====================================================================
+
+input_text:
+  awair_companion_topic_prefix:
+    name: Awtrix MQTT topic prefix
+    initial: awtrix_xxxxxx     # ← replace with YOUR prefix (Awtrix → Web UI → MQTT)
+    max: 64
+
+  awair_companion_app_name:
+    name: Awtrix custom app name (dots overview)
+    initial: awair
+    max: 32
+
+
+# ---------------------------------------------------------------------
+# Template sensor — exposes both rendered JSON payloads as attributes
+# ---------------------------------------------------------------------
+template:
+  - sensor:
+      - name: "Awair Element Awtrix Companion payload"
+        unique_id: awair_companion_payload
+        state: "ok"
+        attributes:
+
+          # ---------- shared config (edit here) ----------------------
+          # Score entity, sensor list, palette, thresholds.
+          # Both payloads below read from the same definitions.
+          # ----------------------------------------------------------
+
+          payload_dots: >-
+            {% set SCORE_ENTITY = 'sensor.awair_element_score' %}
+            {% set SENSORS = [
+                 { 'entity': 'sensor.awair_element_temperature',
+                   'th': [18, 20, 25, 27], 'sym': true  },
+                 { 'entity': 'sensor.awair_element_humidity',
+                   'th': [30, 40, 60, 65], 'sym': true  },
+                 { 'entity': 'sensor.awair_element_co2',
+                   'th': [600, 1000, 2000, 4500], 'sym': false },
+                 { 'entity': 'sensor.awair_element_voc',
+                   'th': [300, 500, 3000, 25000], 'sym': false },
+                 { 'entity': 'sensor.awair_element_pm25',
+                   'th': [12, 35, 55, 150], 'sym': false }
+            ] %}
+            {% set PALETTE = ['#4ADE80', '#FACC15', '#FB923C', '#EF4444', '#A855F7'] %}
+            {% set DIM = '#101010' %}
+            {% set DIGITS = {
+              '0': ['111','101','101','101','111'],
+              '1': ['010','110','010','010','111'],
+              '2': ['111','001','111','100','111'],
+              '3': ['111','001','111','001','111'],
+              '4': ['101','101','111','001','001'],
+              '5': ['111','100','111','001','111'],
+              '6': ['111','100','111','101','111'],
+              '7': ['111','001','010','010','010'],
+              '8': ['111','101','111','101','111'],
+              '9': ['111','101','111','001','111']
+            } %}
+
+            {% macro level_lin(v, t) -%}
+              {%- set v = v | float(0) -%}
+              {%- if v < t[0] -%}1
+              {%- elif v < t[1] -%}2
+              {%- elif v < t[2] -%}3
+              {%- elif v < t[3] -%}4
+              {%- else -%}5
+              {%- endif -%}
+            {%- endmacro %}
+            {% macro level_sym(v, t) -%}
+              {%- set v = v | float(0) -%}
+              {%- if v >= t[1] and v <= t[2] -%}1
+              {%- elif (v >= t[0] and v < t[1]) or (v > t[2] and v <= t[3]) -%}2
+              {%- else -%}
+                {%- set ls = (t[1] - t[0]) | float(1) -%}
+                {%- set hs = (t[3] - t[2]) | float(1) -%}
+                {%- if v < t[0] -%}
+                  {%- if v >= t[0] - ls -%}3
+                  {%- elif v >= t[0] - 2 * ls -%}4
+                  {%- else -%}5
+                  {%- endif -%}
+                {%- else -%}
+                  {%- if v <= t[3] + hs -%}3
+                  {%- elif v <= t[3] + 2 * hs -%}4
+                  {%- else -%}5
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endmacro %}
+            {% macro score_level(s) -%}
+              {%- set s = s | int(0) -%}
+              {%- if s >= 80 -%}1
+              {%- elif s >= 60 -%}2
+              {%- elif s >= 40 -%}3
+              {%- elif s >= 20 -%}4
+              {%- else -%}5
+              {%- endif -%}
+            {%- endmacro %}
+
+            {% set score_raw = states(SCORE_ENTITY) %}
+            {% set score = score_raw | int(0) if score_raw not in
+                ['unknown','unavailable','none', None] else 0 %}
+            {% set score_disp = 99 if score >= 100 else score %}
+            {% set s_lvl = score_level(score) | int %}
+            {% set s_color = PALETTE[s_lvl - 1] %}
+
+            {% set ns = namespace(draw=[], x=1) %}
+
+            {# ---- score digits via 3×5 font, rows 1-5 ---- #}
+            {% for ch in score_disp | string %}
+              {% set glyph = DIGITS.get(ch, ['000','000','000','000','000']) %}
+              {% for r in range(5) %}
+                {% for c in range(3) %}
+                  {% if glyph[r][c] == '1' %}
+                    {% set ns.draw = ns.draw + [{'dp': [ns.x + c, 1 + r, s_color]}] %}
+                  {% endif %}
+                {% endfor %}
+              {% endfor %}
+              {% set ns.x = ns.x + 4 %}
+            {% endfor %}
+
+            {# ---- 5 sensor dot-bars in cols 11..28, rows 1-5 ---- #}
+            {% for s in SENSORS %}
+              {% set v_raw = states(s.entity) %}
+              {% if v_raw in ['unknown','unavailable','none', None] %}
+                {% set lvl = 0 %}
+              {% elif s.sym %}
+                {% set lvl = level_sym(v_raw, s.th) | int %}
+              {% else %}
+                {% set lvl = level_lin(v_raw, s.th) | int %}
+              {% endif %}
+              {% set col = 11 + loop.index0 * 4 %}
+              {% for dot in range(5) %}
+                {% set row = 5 - dot %}
+                {% set lit = (dot + 1) <= lvl %}
+                {% set color = PALETTE[dot] if lit else DIM %}
+                {% set ns.draw = ns.draw + [{'df': [col, row, 2, 1, color]}] %}
+              {% endfor %}
+            {% endfor %}
+
+            {# ---- score progress bar at row 7 ---- #}
+            {% set bar_w = (score / 100 * 32) | round(0, 'ceil') | int %}
+            {% if bar_w > 0 %}
+              {% set ns.draw = ns.draw + [{'df': [0, 7, bar_w, 1, s_color]}] %}
+            {% endif %}
+            {% if bar_w < 32 %}
+              {% set ns.draw = ns.draw + [{'df': [bar_w, 7, 32 - bar_w, 1, DIM]}] %}
+            {% endif %}
+
+            {{ {
+                'text': ' ',
+                'noScroll': true,
+                'duration': 8,
+                'lifetime': 180,
+                'lifetimeMode': 0,
+                'draw': ns.draw
+            } | to_json }}
+
+
+          # =====================================================
+          # App 2 — scrolling text with per-value severity colors
+          # =====================================================
+          payload_text: >-
+            {% set SCORE_ENTITY = 'sensor.awair_element_score' %}
+            {% set SENSORS = [
+                 { 'entity': 'sensor.awair_element_temperature',
+                   'th': [18, 20, 25, 27], 'sym': true,
+                   'label': 'Temp', 'suffix': 'C', 'decimals': 0 },
+                 { 'entity': 'sensor.awair_element_humidity',
+                   'th': [30, 40, 60, 65], 'sym': true,
+                   'label': 'Hum', 'suffix': '%', 'decimals': 0 },
+                 { 'entity': 'sensor.awair_element_co2',
+                   'th': [600, 1000, 2000, 4500], 'sym': false,
+                   'label': 'CO2', 'suffix': '', 'decimals': 0 },
+                 { 'entity': 'sensor.awair_element_voc',
+                   'th': [300, 500, 3000, 25000], 'sym': false,
+                   'label': 'VOC', 'suffix': '', 'decimals': 0 },
+                 { 'entity': 'sensor.awair_element_pm25',
+                   'th': [12, 35, 55, 150], 'sym': false,
+                   'label': 'PM', 'suffix': '', 'decimals': 0 }
+            ] %}
+            {% set PALETTE = ['#4ADE80', '#FACC15', '#FB923C', '#EF4444', '#A855F7'] %}
+            {% set LABEL_COLOR = '#888888' %}
+            {% set SEP = '  ' %}
+
+            {% macro level_lin(v, t) -%}
+              {%- set v = v | float(0) -%}
+              {%- if v < t[0] -%}1{%- elif v < t[1] -%}2
+              {%- elif v < t[2] -%}3{%- elif v < t[3] -%}4
+              {%- else -%}5{%- endif -%}
+            {%- endmacro %}
+            {% macro level_sym(v, t) -%}
+              {%- set v = v | float(0) -%}
+              {%- if v >= t[1] and v <= t[2] -%}1
+              {%- elif (v >= t[0] and v < t[1]) or (v > t[2] and v <= t[3]) -%}2
+              {%- else -%}
+                {%- set ls = (t[1] - t[0]) | float(1) -%}
+                {%- set hs = (t[3] - t[2]) | float(1) -%}
+                {%- if v < t[0] -%}
+                  {%- if v >= t[0] - ls -%}3
+                  {%- elif v >= t[0] - 2 * ls -%}4{%- else -%}5{%- endif -%}
+                {%- else -%}
+                  {%- if v <= t[3] + hs -%}3
+                  {%- elif v <= t[3] + 2 * hs -%}4{%- else -%}5{%- endif -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endmacro %}
+            {% macro score_level(s) -%}
+              {%- set s = s | int(0) -%}
+              {%- if s >= 80 -%}1{%- elif s >= 60 -%}2
+              {%- elif s >= 40 -%}3{%- elif s >= 20 -%}4
+              {%- else -%}5{%- endif -%}
+            {%- endmacro %}
+
+            {% set score_raw = states(SCORE_ENTITY) %}
+            {% set score = score_raw | int(0) if score_raw not in
+                ['unknown','unavailable','none', None] else 0 %}
+            {% set s_color = PALETTE[(score_level(score) | int) - 1] %}
+
+            {% set ns = namespace(seg=[]) %}
+            {% set ns.seg = ns.seg + [{'t': 'Score ', 'c': LABEL_COLOR}] %}
+            {% set ns.seg = ns.seg + [{'t': score | string, 'c': s_color}] %}
+
+            {% for s in SENSORS %}
+              {% set v_raw = states(s.entity) %}
+              {% if v_raw in ['unknown','unavailable','none', None] %}
+                {% set v_str = '--' %}
+                {% set vcolor = LABEL_COLOR %}
+              {% else %}
+                {% if s.decimals == 0 %}
+                  {% set v_str = (v_raw | float(0)) | round(0) | int | string %}
+                {% else %}
+                  {% set v_str = (v_raw | float(0)) | round(s.decimals) | string %}
+                {% endif %}
+                {% if s.sym %}
+                  {% set lvl = level_sym(v_raw, s.th) | int %}
+                {% else %}
+                  {% set lvl = level_lin(v_raw, s.th) | int %}
+                {% endif %}
+                {% set vcolor = PALETTE[lvl - 1] %}
+              {% endif %}
+              {% set ns.seg = ns.seg + [{'t': SEP ~ s.label ~ ' ', 'c': LABEL_COLOR}] %}
+              {% set ns.seg = ns.seg + [{'t': v_str ~ s.suffix, 'c': vcolor}] %}
+            {% endfor %}
+
+            {{ {
+                'text': ns.seg,
+                'duration': 12,
+                'lifetime': 180,
+                'lifetimeMode': 0,
+                'scrollSpeed': 90
+            } | to_json }}
+
+
+# ---------------------------------------------------------------------
+# Automation — push BOTH payloads on any sensor change + every minute
+# ---------------------------------------------------------------------
+automation:
+  - id: awair_companion_publish
+    alias: "Awair Element Awtrix Companion — publish dots + text apps"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.awair_element_score
+          - sensor.awair_element_temperature
+          - sensor.awair_element_humidity
+          - sensor.awair_element_co2
+          - sensor.awair_element_voc
+          - sensor.awair_element_pm25
+      - platform: time_pattern
+        minutes: "/1"
+      - platform: homeassistant
+        event: start
+    action:
+      - service: mqtt.publish
+        data:
+          topic: >-
+            {{ states('input_text.awair_companion_topic_prefix') }}/custom/{{ states('input_text.awair_companion_app_name') }}
+          retain: false
+          payload: >-
+            {{ state_attr('sensor.awair_companion_payload', 'payload_dots') }}
+      - service: mqtt.publish
+        data:
+          topic: >-
+            {{ states('input_text.awair_companion_topic_prefix') }}/custom/{{ states('input_text.awair_companion_app_name') }}_text
+          retain: false
+          payload: >-
+            {{ state_attr('sensor.awair_companion_payload', 'payload_text') }}
+
+
+  # Optional: clear apps on HA shutdown so the display doesn't show stale data
+  - id: awair_companion_clear_on_stop
+    alias: "Awair Element Awtrix Companion — clear on shutdown"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: shutdown
+    action:
+      - service: mqtt.publish
+        data:
+          topic: >-
+            {{ states('input_text.awair_companion_topic_prefix') }}/custom/{{ states('input_text.awair_companion_app_name') }}
+          retain: false
+          payload: ""
+      - service: mqtt.publish
+        data:
+          topic: >-
+            {{ states('input_text.awair_companion_topic_prefix') }}/custom/{{ states('input_text.awair_companion_app_name') }}_text
+          retain: false
+          payload: ""

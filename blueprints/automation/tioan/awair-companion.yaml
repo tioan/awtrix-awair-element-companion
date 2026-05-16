@@ -1,0 +1,520 @@
+blueprint:
+  name: Awair Element Awtrix Companion
+  description: |
+    Awair-style air-quality visualisation on an **Awtrix 3** 32×8 LED matrix,
+    in the visual language of [air-dots-card](https://github.com/tioan/air-dots-card)
+    for Home Assistant.
+
+    Registers two custom apps that the Awtrix cycles through:
+
+    - **`awair`** — pure dot bars + score, static (8 s)
+    - **`awair_text`** — scrolling line of all values, each tinted by its severity (~12 s)
+
+    Each sensor is a vertical bar of 5 dots. Colors are fixed by position:
+    🟢 → 🟡 → 🟠 → 🔴 → 🟣 from bottom to top — more lit dots = worse,
+    exactly like the Awair Element.
+
+    **Requirements:**
+    - Awtrix 3 firmware with MQTT enabled (Awtrix Web UI → MQTT)
+    - Home Assistant MQTT integration set up
+    - 5 numeric sensors (Awair Element by default; SCD40, SEN55, BME680, etc. work too)
+
+  domain: automation
+  source_url: https://github.com/tioan/air-dots-card
+
+  input:
+
+    awtrix_section:
+      name: Awtrix device
+      icon: mdi:led-strip-variant
+      input:
+        mqtt_prefix:
+          name: MQTT prefix
+          description: >
+            Your Awtrix MQTT prefix — find it in the Awtrix web UI under
+            **MQTT → Prefix** (e.g. `awtrix_a1b2c3` or `ulanzi`).
+          selector:
+            text:
+        app_name:
+          name: Custom app name
+          description: >
+            Name for the dots-overview app. The text app is created automatically
+            with the suffix `_text` (e.g. `awair` and `awair_text`).
+          default: awair
+          selector:
+            text:
+
+    score_section:
+      name: Air-quality score
+      icon: mdi:speedometer
+      input:
+        score_entity:
+          name: Score sensor
+          description: >
+            0–100 number where 100 = best. Used for the big number on the left
+            and the bottom progress bar.
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+
+    sensors_section:
+      name: Sensors (5 required)
+      icon: mdi:molecule
+      description: >
+        Pick the entity for each of the five sensor slots. The dot bar order on
+        the display is **Temp · Humidity · CO₂ · VOC · PM2.5** (left to right).
+      input:
+        temperature_entity:
+          name: Temperature
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+        humidity_entity:
+          name: Humidity
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+        co2_entity:
+          name: CO₂
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+        voc_entity:
+          name: TVOC
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+        pm25_entity:
+          name: PM2.5
+          selector:
+            entity:
+              filter:
+                - domain: sensor
+
+    colors_section:
+      name: Bar colors (advanced)
+      icon: mdi:palette
+      collapsed: true
+      description: >
+        Color per severity level. Defaults match the Awair-style palette.
+        On a real LED matrix, more saturated values often look better — if the
+        L1-green looks bluish, try `[0, 255, 102]` or `[34, 197, 94]` instead.
+      input:
+        color_l1:
+          name: L1 — good (bottom dot)
+          default: [74, 222, 128]
+          selector:
+            color_rgb:
+        color_l2:
+          name: L2 — fair
+          default: [250, 204, 21]
+          selector:
+            color_rgb:
+        color_l3:
+          name: L3 — poor
+          default: [251, 146, 60]
+          selector:
+            color_rgb:
+        color_l4:
+          name: L4 — bad
+          default: [239, 68, 68]
+          selector:
+            color_rgb:
+        color_l5:
+          name: L5 — severe (top dot)
+          default: [168, 85, 247]
+          selector:
+            color_rgb:
+
+    thresholds_section:
+      name: Thresholds (advanced)
+      icon: mdi:tune
+      collapsed: true
+      description: >
+        Four numbers per sensor, comma-separated, defining the 5 severity levels.
+        Defaults match Awair Element. Temperature and humidity use a **symmetric**
+        scale (`[low_bad, low_ok, high_ok, high_bad]`); CO₂, VOC and PM2.5 are
+        **linear** (`[L1→L2, L2→L3, L3→L4, L4→L5]`, higher = worse).
+      input:
+        temperature_thresholds:
+          name: Temperature thresholds
+          default: "18, 20, 25, 27"
+          selector:
+            text:
+        humidity_thresholds:
+          name: Humidity thresholds
+          default: "30, 40, 60, 65"
+          selector:
+            text:
+        co2_thresholds:
+          name: CO₂ thresholds
+          default: "600, 1000, 2000, 4500"
+          selector:
+            text:
+        voc_thresholds:
+          name: TVOC thresholds
+          default: "300, 500, 3000, 25000"
+          selector:
+            text:
+        pm25_thresholds:
+          name: PM2.5 thresholds
+          default: "12, 35, 55, 150"
+          selector:
+            text:
+
+    display_section:
+      name: Display behavior (advanced)
+      icon: mdi:cog
+      collapsed: true
+      input:
+        score_position:
+          name: Score number position
+          description: >
+            Where to render the 0–99 score number on the dots app.
+            `off` hides the number entirely (bars are then centered).
+          default: left
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - value: left
+                  label: "Left (cols 1–9, bars start at col 11)"
+                - value: right
+                  label: "Right (bars start at col 1, score right-aligned to col 30)"
+                - value: "off"
+                  label: "Off (no number, bars centered)"
+        score_bar_position:
+          name: Score progress bar position
+          description: >
+            Where the horizontal severity bar appears. `top` puts it on row 0,
+            `bottom` on row 7, `off` removes it entirely.
+          default: bottom
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - value: bottom
+                  label: "Bottom row (row 7)"
+                - value: top
+                  label: "Top row (row 0)"
+                - value: "off"
+                  label: "Off"
+        enable_text_app:
+          name: Show scrolling text app
+          description: Disable to keep only the static dots overview in the rotation.
+          default: true
+          selector:
+            boolean:
+        dots_duration:
+          name: Dots app duration
+          default: 8
+          selector:
+            number:
+              min: 3
+              max: 60
+              step: 1
+              unit_of_measurement: s
+              mode: slider
+        text_duration:
+          name: Text app duration
+          default: 12
+          selector:
+            number:
+              min: 3
+              max: 60
+              step: 1
+              unit_of_measurement: s
+              mode: slider
+        scroll_speed:
+          name: Scroll speed
+          description: Awtrix scroll speed as a percentage of normal.
+          default: 90
+          selector:
+            number:
+              min: 10
+              max: 100
+              step: 5
+              unit_of_measurement: "%"
+              mode: slider
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id:
+      - !input score_entity
+      - !input temperature_entity
+      - !input humidity_entity
+      - !input co2_entity
+      - !input voc_entity
+      - !input pm25_entity
+  - platform: time_pattern
+    minutes: "/1"
+  - platform: homeassistant
+    event: start
+
+action:
+  - variables:
+      mqtt_prefix: !input mqtt_prefix
+      app_name: !input app_name
+      enable_text_app: !input enable_text_app
+      dots_duration: !input dots_duration
+      text_duration: !input text_duration
+      scroll_speed: !input scroll_speed
+      score_entity: !input score_entity
+      score_position: !input score_position
+      score_bar_position: !input score_bar_position
+      color_l1: !input color_l1
+      color_l2: !input color_l2
+      color_l3: !input color_l3
+      color_l4: !input color_l4
+      color_l5: !input color_l5
+      sensors_cfg:
+        - entity: !input temperature_entity
+          th_str: !input temperature_thresholds
+          sym: true
+          label: "Temp"
+          suffix: "C"
+        - entity: !input humidity_entity
+          th_str: !input humidity_thresholds
+          sym: true
+          label: "Hum"
+          suffix: "%"
+        - entity: !input co2_entity
+          th_str: !input co2_thresholds
+          sym: false
+          label: "CO2"
+          suffix: ""
+        - entity: !input voc_entity
+          th_str: !input voc_thresholds
+          sym: false
+          label: "VOC"
+          suffix: ""
+        - entity: !input pm25_entity
+          th_str: !input pm25_thresholds
+          sym: false
+          label: "PM"
+          suffix: ""
+
+  # ===================================================================
+  # App 1 — dots overview (static)
+  # ===================================================================
+  - service: mqtt.publish
+    data:
+      topic: "{{ mqtt_prefix }}/custom/{{ app_name }}"
+      retain: false
+      payload: >-
+        {# ---- Build PALETTE from user RGB inputs ---- #}
+        {% set ns_pal = namespace(p=[]) %}
+        {% for c in [color_l1, color_l2, color_l3, color_l4, color_l5] %}
+          {% set ns_pal.p = ns_pal.p + ['#%02X%02X%02X' | format(c[0]|int, c[1]|int, c[2]|int)] %}
+        {% endfor %}
+        {% set PALETTE = ns_pal.p %}
+        {% set DIM = '#101010' %}
+        {% set DIGITS = {
+          '0': ['111','101','101','101','111'],
+          '1': ['010','110','010','010','111'],
+          '2': ['111','001','111','100','111'],
+          '3': ['111','001','111','001','111'],
+          '4': ['101','101','111','001','001'],
+          '5': ['111','100','111','001','111'],
+          '6': ['111','100','111','101','111'],
+          '7': ['111','001','010','010','010'],
+          '8': ['111','101','111','101','111'],
+          '9': ['111','101','111','001','111']
+        } %}
+
+        {% macro level_lin(v, t) -%}
+          {%- set v = v | float(0) -%}
+          {%- if v < t[0] -%}1{%- elif v < t[1] -%}2{%- elif v < t[2] -%}3
+          {%- elif v < t[3] -%}4{%- else -%}5{%- endif -%}
+        {%- endmacro %}
+        {% macro level_sym(v, t) -%}
+          {%- set v = v | float(0) -%}
+          {%- if v >= t[1] and v <= t[2] -%}1
+          {%- elif (v >= t[0] and v < t[1]) or (v > t[2] and v <= t[3]) -%}2
+          {%- else -%}
+            {%- set ls = (t[1] - t[0]) | float(1) -%}
+            {%- set hs = (t[3] - t[2]) | float(1) -%}
+            {%- if v < t[0] -%}
+              {%- if v >= t[0] - ls -%}3{%- elif v >= t[0] - 2 * ls -%}4{%- else -%}5{%- endif -%}
+            {%- else -%}
+              {%- if v <= t[3] + hs -%}3{%- elif v <= t[3] + 2 * hs -%}4{%- else -%}5{%- endif -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endmacro %}
+        {% macro score_level(s) -%}
+          {%- set s = s | int(0) -%}
+          {%- if s >= 80 -%}1{%- elif s >= 60 -%}2{%- elif s >= 40 -%}3
+          {%- elif s >= 20 -%}4{%- else -%}5{%- endif -%}
+        {%- endmacro %}
+
+        {% set score_raw = states(score_entity) %}
+        {% set score = score_raw | int(0) if score_raw not in
+            ['unknown','unavailable','none', None] else 0 %}
+        {% set score_disp = 99 if score >= 100 else score %}
+        {% set s_lvl = score_level(score) | int %}
+        {% set s_color = PALETTE[s_lvl - 1] %}
+
+        {# ---- Layout positioning based on score_position ---- #}
+        {% set score_str = score_disp | string %}
+        {% set score_width = (score_str | length) * 4 - 1 %}
+        {% if score_position == 'left' %}
+          {% set show_score = true %}
+          {% set score_x = 1 %}
+          {% set bar_x_start = 11 %}
+        {% elif score_position == 'right' %}
+          {% set show_score = true %}
+          {% set score_x = 32 - score_width %}
+          {% set bar_x_start = 1 %}
+        {% else %}
+          {% set show_score = false %}
+          {% set score_x = 0 %}
+          {% set bar_x_start = 7 %}
+        {% endif %}
+
+        {% set ns = namespace(draw=[], x=0) %}
+
+        {# ---- score digits — own 3×5 font, rows 1-5 ---- #}
+        {% if show_score %}
+          {% set ns.x = score_x %}
+          {% for ch in score_str %}
+            {% set glyph = DIGITS.get(ch, ['000','000','000','000','000']) %}
+            {% for r in range(5) %}
+              {% for c in range(3) %}
+                {% if glyph[r][c] == '1' %}
+                  {% set ns.draw = ns.draw + [{'dp': [ns.x + c, 1 + r, s_color]}] %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {% set ns.x = ns.x + 4 %}
+          {% endfor %}
+        {% endif %}
+
+        {# ---- 5 sensor dot-bars, rows 1-5 ---- #}
+        {% for s in sensors_cfg %}
+          {% set th = s.th_str.split(',') | map('trim') | map('float') | list %}
+          {% set v_raw = states(s.entity) %}
+          {% if v_raw in ['unknown','unavailable','none', None] %}
+            {% set lvl = 0 %}
+          {% elif s.sym %}
+            {% set lvl = level_sym(v_raw, th) | int %}
+          {% else %}
+            {% set lvl = level_lin(v_raw, th) | int %}
+          {% endif %}
+          {% set col = bar_x_start + loop.index0 * 4 %}
+          {% for dot in range(5) %}
+            {% set row = 5 - dot %}
+            {% set lit = (dot + 1) <= lvl %}
+            {% set color = PALETTE[dot] if lit else DIM %}
+            {% set ns.draw = ns.draw + [{'df': [col, row, 2, 1, color]}] %}
+          {% endfor %}
+        {% endfor %}
+
+        {# ---- score progress bar — position from input ---- #}
+        {% if score_bar_position != 'off' %}
+          {% set bar_y = 0 if score_bar_position == 'top' else 7 %}
+          {% set bar_w = (score / 100 * 32) | round(0, 'ceil') | int %}
+          {% if bar_w > 0 %}
+            {% set ns.draw = ns.draw + [{'df': [0, bar_y, bar_w, 1, s_color]}] %}
+          {% endif %}
+          {% if bar_w < 32 %}
+            {% set ns.draw = ns.draw + [{'df': [bar_w, bar_y, 32 - bar_w, 1, DIM]}] %}
+          {% endif %}
+        {% endif %}
+
+        {{ {
+            'text': ' ',
+            'noScroll': true,
+            'duration': dots_duration,
+            'lifetime': 180,
+            'lifetimeMode': 0,
+            'draw': ns.draw
+        } | to_json }}
+
+  # ===================================================================
+  # App 2 — scrolling text with per-value severity colors
+  # ===================================================================
+  - if:
+      - condition: template
+        value_template: "{{ enable_text_app }}"
+    then:
+      - service: mqtt.publish
+        data:
+          topic: "{{ mqtt_prefix }}/custom/{{ app_name }}_text"
+          retain: false
+          payload: >-
+            {# Build PALETTE from user RGB inputs (same as dots app) #}
+            {% set ns_pal = namespace(p=[]) %}
+            {% for c in [color_l1, color_l2, color_l3, color_l4, color_l5] %}
+              {% set ns_pal.p = ns_pal.p + ['#%02X%02X%02X' | format(c[0]|int, c[1]|int, c[2]|int)] %}
+            {% endfor %}
+            {% set PALETTE = ns_pal.p %}
+            {% set LABEL_COLOR = '#888888' %}
+
+            {% macro level_lin(v, t) -%}
+              {%- set v = v | float(0) -%}
+              {%- if v < t[0] -%}1{%- elif v < t[1] -%}2{%- elif v < t[2] -%}3
+              {%- elif v < t[3] -%}4{%- else -%}5{%- endif -%}
+            {%- endmacro %}
+            {% macro level_sym(v, t) -%}
+              {%- set v = v | float(0) -%}
+              {%- if v >= t[1] and v <= t[2] -%}1
+              {%- elif (v >= t[0] and v < t[1]) or (v > t[2] and v <= t[3]) -%}2
+              {%- else -%}
+                {%- set ls = (t[1] - t[0]) | float(1) -%}
+                {%- set hs = (t[3] - t[2]) | float(1) -%}
+                {%- if v < t[0] -%}
+                  {%- if v >= t[0] - ls -%}3{%- elif v >= t[0] - 2 * ls -%}4{%- else -%}5{%- endif -%}
+                {%- else -%}
+                  {%- if v <= t[3] + hs -%}3{%- elif v <= t[3] + 2 * hs -%}4{%- else -%}5{%- endif -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endmacro %}
+            {% macro score_level(s) -%}
+              {%- set s = s | int(0) -%}
+              {%- if s >= 80 -%}1{%- elif s >= 60 -%}2{%- elif s >= 40 -%}3
+              {%- elif s >= 20 -%}4{%- else -%}5{%- endif -%}
+            {%- endmacro %}
+
+            {% set score_raw = states(score_entity) %}
+            {% set score = score_raw | int(0) if score_raw not in
+                ['unknown','unavailable','none', None] else 0 %}
+            {% set s_color = PALETTE[(score_level(score) | int) - 1] %}
+
+            {% set ns = namespace(seg=[]) %}
+            {% set ns.seg = ns.seg + [{'t': 'Score ', 'c': LABEL_COLOR}] %}
+            {% set ns.seg = ns.seg + [{'t': score | string, 'c': s_color}] %}
+
+            {% for s in sensors_cfg %}
+              {% set th = s.th_str.split(',') | map('trim') | map('float') | list %}
+              {% set v_raw = states(s.entity) %}
+              {% if v_raw in ['unknown','unavailable','none', None] %}
+                {% set v_str = '--' %}
+                {% set vcolor = LABEL_COLOR %}
+              {% else %}
+                {% set v_str = (v_raw | float(0)) | round(0) | int | string %}
+                {% if s.sym %}
+                  {% set lvl = level_sym(v_raw, th) | int %}
+                {% else %}
+                  {% set lvl = level_lin(v_raw, th) | int %}
+                {% endif %}
+                {% set vcolor = PALETTE[lvl - 1] %}
+              {% endif %}
+              {% set ns.seg = ns.seg + [{'t': '  ' ~ s.label ~ ' ', 'c': LABEL_COLOR}] %}
+              {% set ns.seg = ns.seg + [{'t': v_str ~ s.suffix, 'c': vcolor}] %}
+            {% endfor %}
+
+            {{ {
+                'text': ns.seg,
+                'duration': text_duration,
+                'lifetime': 180,
+                'lifetimeMode': 0,
+                'scrollSpeed': scroll_speed
+            } | to_json }}
