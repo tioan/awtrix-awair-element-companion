@@ -1,6 +1,6 @@
-# Awair Element Awtrix Companion
+# Awtrix Awair Element Companion
 
-[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftioan%2Fawair-element-awtrix-companion%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftioan%2Fawair-companion.yaml)
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ftioan%2Fawtrix-awair-element-companion%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftioan%2Fawtrix-awair-element-companion.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Created with Claude](https://img.shields.io/badge/Created%20with-Claude%20Sonnet%204.6-blueviolet.svg?logo=anthropic)](https://claude.ai)
 
@@ -45,9 +45,9 @@ Click the **Open in Home Assistant** button at the top of this README. It opens 
 
 ### Or manually
 
-1. Copy `blueprints/automation/tioan/awair-companion.yaml` into your HA config at the same path: `/config/blueprints/automation/tioan/awair-companion.yaml`
+1. Copy `blueprints/automation/tioan/awtrix-awair-element-companion.yaml` into your HA config at the same path: `/config/blueprints/automation/tioan/awtrix-awair-element-companion.yaml`
 2. Reload automations or restart HA.
-3. **Settings → Automations & Scenes → Blueprints** — "Awair Element Awtrix Companion" appears.
+3. **Settings → Automations & Scenes → Blueprints** — "Awtrix Awair Element Companion" appears.
 4. Click **Use blueprint** and fill in the form:
    - **MQTT prefix** — Awtrix Web UI → MQTT → "Prefix", e.g. `awtrix_a1b2c3`
    - **Score sensor** + **5 sensor entities** (Temp / Humidity / CO₂ / TVOC / PM2.5)
@@ -83,7 +83,7 @@ Open `preview/index.html` in a browser — same renderer the HA template runs, w
 
 ## Advanced — package YAML instead of the blueprint
 
-For users who want to hack on per-sensor labels, symmetric flags, or want a debug template sensor exposing the rendered JSON: drop `packages/awair-companion.yaml` into your `/config/packages/` folder. Functionally identical to the blueprint, exposed in plain YAML.
+For users who want to hack on per-sensor labels, symmetric flags, or want a debug template sensor exposing the rendered JSON: drop `packages/awtrix-awair-element-companion.yaml` into your `/config/packages/` folder. Functionally identical to the blueprint, exposed in plain YAML.
 
 ## Testing without HA
 

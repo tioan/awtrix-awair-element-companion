@@ -1,5 +1,5 @@
 blueprint:
-  name: Awair Element Awtrix Companion
+  name: Awtrix Awair Element Companion
   description: |
     Awair-style air-quality visualisation on an **Awtrix 3** 32×8 LED matrix,
     in the visual language of [air-dots-card](https://github.com/tioan/air-dots-card)
