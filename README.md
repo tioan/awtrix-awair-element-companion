@@ -54,6 +54,29 @@ Click the **Open in Home Assistant** button at the top of this README. It opens 
    - (Optional) thresholds, colors, score position, progress bar position
 5. Save. The display updates on every sensor change + once per minute.
 
+### YAML mode (config-as-code)
+
+If you manage automations as YAML rather than through the UI, use `use_blueprint` in your `automations.yaml`:
+
+```yaml
+- id: awair_companion
+  alias: "Awair Element Awtrix Companion"
+  use_blueprint:
+    path: tioan/awtrix-awair-element-companion.yaml
+    input:
+      mqtt_prefix: awtrix_a1b2c3
+      score_entity: sensor.awair_element_score
+      temperature_entity: sensor.awair_element_temperature
+      humidity_entity:    sensor.awair_element_humidity
+      co2_entity:         sensor.awair_element_co2
+      voc_entity:         sensor.awair_element_voc
+      pm25_entity:        sensor.awair_element_pm25
+```
+
+All advanced inputs (colors, thresholds, display behavior) are optional — omit any key to keep its default value. A fully annotated example with all available keys is at [`examples/automations-yaml-mode.yaml`](examples/automations-yaml-mode.yaml).
+
+The blueprint still needs to be present in `/config/blueprints/automation/tioan/` — import it once via the UI or copy the file manually, then reference it from YAML forever after.
+
 ## Configuration options
 
 All exposed via the blueprint UI, grouped into sections:
@@ -81,9 +104,18 @@ All exposed via the blueprint UI, grouped into sections:
 
 Open `preview/index.html` in a browser — same renderer the HA template runs, with sliders for every sensor and a tab to switch between the dots overview, the scrolling text, and auto-rotate.
 
-## Advanced — package YAML instead of the blueprint
+## Advanced — package YAML (full code, no blueprint)
 
-For users who want to hack on per-sensor labels, symmetric flags, or want a debug template sensor exposing the rendered JSON: drop `packages/awtrix-awair-element-companion.yaml` into your `/config/packages/` folder. Functionally identical to the blueprint, exposed in plain YAML.
+For users who want to hack on per-sensor labels, symmetric flags, or want a debug template sensor exposing the rendered JSON: drop `packages/awtrix-awair-element-companion.yaml` into your `/config/packages/` folder. Functionally identical to the blueprint, exposed in plain YAML with no dependency on the blueprint engine.
+
+> **Which option is right for you?**
+>
+> | | Blueprint UI | Blueprint YAML mode | Package YAML |
+> |---|---|---|---|
+> | Install | one-click import | copy blueprint file once | copy package file |
+> | Configure | HA form | `automations.yaml` | edit file directly |
+> | Customize (labels, flags) | not possible | not possible | full access |
+> | Debug template sensor | no | no | yes |
 
 ## Testing without HA
 

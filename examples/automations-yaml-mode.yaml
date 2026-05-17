@@ -1,0 +1,59 @@
+# =====================================================================
+# Awtrix Awair Element Companion — YAML mode
+# =====================================================================
+#
+# Paste this into your automations.yaml (or include it via
+# !include_dir_merge_list automations/).  No UI form needed.
+#
+# Requires the blueprint to be installed first:
+#   /config/blueprints/automation/tioan/awtrix-awair-element-companion.yaml
+#
+# =====================================================================
+
+- id: awair_companion
+  alias: "Awair Element Awtrix Companion"
+  use_blueprint:
+    path: tioan/awtrix-awair-element-companion.yaml
+    input:
+
+      # ── Awtrix device ─────────────────────────────────────────────
+      # Awtrix Web UI → MQTT → "Prefix" (e.g. awtrix_a1b2c3)
+      mqtt_prefix: awtrix_xxxxxx
+      app_name: awair                     # dots app; text app gets "_text" suffix
+
+      # ── Air-quality score ─────────────────────────────────────────
+      score_entity: sensor.awair_element_score
+
+      # ── Five sensor entities ──────────────────────────────────────
+      temperature_entity: sensor.awair_element_temperature
+      humidity_entity:    sensor.awair_element_humidity
+      co2_entity:         sensor.awair_element_co2
+      voc_entity:         sensor.awair_element_voc
+      pm25_entity:        sensor.awair_element_pm25
+
+      # ── Bar colors — advanced (RGB triplets) ──────────────────────
+      # Remove any of these lines to keep the built-in defaults.
+      color_l1: [74, 222, 128]    # L1 good   (green)
+      color_l2: [250, 204, 21]    # L2 fair   (yellow)
+      color_l3: [251, 146, 60]    # L3 poor   (orange)
+      color_l4: [239, 68, 68]     # L4 bad    (red)
+      color_l5: [168, 85, 247]    # L5 severe (purple)
+
+      # ── Thresholds — advanced (comma-separated, 4 values each) ───
+      # Temperature & humidity use a symmetric scale
+      #   [low_bad, low_ok, high_ok, high_bad]
+      # CO₂, VOC, PM2.5 use a linear scale
+      #   [L1→L2, L2→L3, L3→L4, L4→L5]  (higher = worse)
+      temperature_thresholds: "18, 20, 25, 27"
+      humidity_thresholds:    "30, 40, 60, 65"
+      co2_thresholds:         "600, 1000, 2000, 4500"
+      voc_thresholds:         "300, 500, 3000, 25000"
+      pm25_thresholds:        "12, 35, 55, 150"
+
+      # ── Display behavior — advanced ───────────────────────────────
+      score_position:     left    # left | right | off
+      score_bar_position: bottom  # bottom | top | off
+      enable_text_app:    true
+      dots_duration:      8       # seconds
+      text_duration:      12      # seconds
+      scroll_speed:       90      # % of normal Awtrix scroll speed
