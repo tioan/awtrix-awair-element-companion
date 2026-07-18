@@ -50,6 +50,15 @@
       voc_thresholds:         "300, 500, 3000, 25000"
       pm25_thresholds:        "12, 35, 55, 150"
 
+      # ── Quiet hours — advanced ───────────────────────────────────
+      # Suppress Awair apps during a nightly window (e.g. when a night
+      # clock takes over the display). Cross-midnight ranges work.
+      # Apps are deleted immediately at quiet_hours_start; they resume
+      # at quiet_hours_end. Disabled by default.
+      enable_quiet_hours:  false
+      quiet_hours_start:   "23:00:00"   # apps cleared at this time
+      quiet_hours_end:     "07:00:00"   # apps resume at this time
+
       # ── Display behavior — advanced ───────────────────────────────
       score_position:     left    # left | right | off
       score_bar_position: bottom  # bottom | top | off

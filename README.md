@@ -88,6 +88,7 @@ All exposed via the blueprint UI, grouped into sections:
 | **Sensors** | Temperature, Humidity, CO₂, TVOC, PM2.5 entities |
 | **Bar colors** (advanced) | 5 color pickers, one per severity level. LED-friendly defaults; tweak if the green looks too bluish on your panel. |
 | **Thresholds** (advanced) | Comma-separated quad per sensor, Awair defaults pre-filled |
+| **Quiet hours** (advanced) | Enable/disable, start time, end time. Apps are deleted at start and restored at end. Cross-midnight ranges (e.g. 23:00 → 07:00) work. |
 | **Display behavior** (advanced) | Score number position (`left` / `right` / `off`), progress bar position (`top` / `bottom` / `off`), text app on/off, app durations, scroll speed |
 
 ### Default Awair thresholds
