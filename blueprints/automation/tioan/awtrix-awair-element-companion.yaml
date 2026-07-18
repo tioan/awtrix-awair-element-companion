@@ -167,6 +167,34 @@ blueprint:
           selector:
             text:
 
+    schedule_section:
+      name: Quiet hours (advanced)
+      icon: mdi:moon-waning-crescent
+      collapsed: true
+      description: >
+        Suppress the Awair apps during a nightly window — useful when another
+        app (e.g. a night clock) takes over the display. When quiet hours
+        start, the Awair apps are actively deleted from the Awtrix so the
+        rotation is clean immediately. They resume automatically at the end time.
+      input:
+        enable_quiet_hours:
+          name: Enable quiet hours
+          default: false
+          selector:
+            boolean:
+        quiet_hours_start:
+          name: Quiet hours — start
+          description: Apps are cleared at this time. Cross-midnight ranges work (e.g. 23:00 → 07:00).
+          default: "23:00:00"
+          selector:
+            time:
+        quiet_hours_end:
+          name: Quiet hours — end
+          description: Apps resume at this time.
+          default: "07:00:00"
+          selector:
+            time:
+
     display_section:
       name: Display behavior (advanced)
       icon: mdi:cog
@@ -258,6 +286,9 @@ trigger:
     minutes: "/1"
   - platform: homeassistant
     event: start
+  - platform: time
+    at: !input quiet_hours_start
+    id: quiet_start
 
 action:
   - variables:
@@ -275,6 +306,9 @@ action:
       color_l3: !input color_l3
       color_l4: !input color_l4
       color_l5: !input color_l5
+      enable_quiet_hours: !input enable_quiet_hours
+      quiet_hours_start: !input quiet_hours_start
+      quiet_hours_end: !input quiet_hours_end
       sensors_cfg:
         - entity: !input temperature_entity
           th_str: !input temperature_thresholds
@@ -301,6 +335,45 @@ action:
           sym: false
           label: "PM"
           suffix: ""
+
+  # ===================================================================
+  # Quiet hours guard
+  # ===================================================================
+  # When the quiet_start trigger fires: delete apps immediately, then stop.
+  - if:
+      - condition: template
+        value_template: >
+          {{ enable_quiet_hours and (trigger.id | default('')) == 'quiet_start' }}
+    then:
+      - service: mqtt.publish
+        data:
+          topic: "{{ mqtt_prefix }}/custom/{{ app_name }}"
+          payload: ""
+      - if:
+          condition: template
+          value_template: "{{ enable_text_app }}"
+        then:
+          - service: mqtt.publish
+            data:
+              topic: "{{ mqtt_prefix }}/custom/{{ app_name }}_text"
+              payload: ""
+      - stop: "Quiet hours started — apps cleared"
+
+  # During quiet hours all other triggers are silently ignored.
+  - condition: template
+    value_template: >
+      {% if not enable_quiet_hours %}
+        true
+      {% else %}
+        {% set t = now().strftime('%H:%M:%S') %}
+        {% set s = quiet_hours_start %}
+        {% set e = quiet_hours_end %}
+        {% if s > e %}
+          {{ t >= e and t < s }}
+        {% else %}
+          {{ t < s or t >= e }}
+        {% endif %}
+      {% endif %}
 
   # ===================================================================
   # App 1 — dots overview (static)
