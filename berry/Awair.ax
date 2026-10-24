@@ -1,0 +1,199 @@
+# @name    Awair
+# @desc    Awair Element air quality: dot bars and one value at a time, from MQTT
+# @author  tioan
+# @version 1.3
+# @config  base   text   "MQTT-Topic"            default="awair/arbeitszimmer" help="Werte kommen als <Topic>/score, temp, hum, co2, voc, pm25"
+# @config  dots_s number "Dauer Balken"          default=10 min=3 max=60 unit=s
+# @config  item_s number "Dauer je Wert"         default=3 min=1 max=20 unit=s
+# @config  stale  number "Grau nach"             default=30 min=0 max=240 unit=min help="Ohne neue Werte grau anzeigen, 0 = nie"
+# @config  t_temp text   "Temperatur"            default="18, 20, 25, 27" group=Grenzwerte help="Symmetrisch: zu kalt, ok ab, ok bis, zu warm"
+# @config  t_hum  text   "Luftfeuchtigkeit"      default="30, 40, 60, 65" group=Grenzwerte help="Symmetrisch wie Temperatur"
+# @config  t_co2  text   "CO2"                   default="600, 1000, 2000, 4500" group=Grenzwerte
+# @config  t_voc  text   "TVOC"                  default="300, 500, 3000, 25000" group=Grenzwerte
+# @config  t_pm   text   "PM2.5"                 default="12, 35, 55, 150" group=Grenzwerte
+
+# Port of the Awtrix Awair Element Companion blueprint (tioan/awtrix-awair-element-companion)
+# to AWTRIX NG. Values arrive retained via MQTT and are kept in the store, so the app shows
+# the last known values right after a reboot and greys them out once they are too old.
+
+import string
+
+class Awair
+  var keys, sym, th, pal, val, score, seen, stale_s, dim
+  var lvl, dotc, stxt, scol, ilab, ival, icol, ishort
+  var page, t0, dots_ms, item_ms
+
+  def init()
+    self.keys = ["temp", "hum", "co2", "voc", "pm25"]
+    self.sym = [true, true, false, false, false]
+    self.th = []
+    for k : ["t_temp", "t_hum", "t_co2", "t_voc", "t_pm"]
+      var t = []
+      for p : string.split(str(store.get(k)), ",")
+        var n = num(p)
+        if n != nil t.push(n) end
+      end
+      if size(t) == 0 t.push(0) end
+      while size(t) < 4 t.push(t[-1]) end   # tolerate a short list instead of crashing
+      self.th.push(t)
+    end
+    # Awair palette, good to severe (the blueprint's defaults)
+    self.pal = [0x4ADE80, 0xFACC15, 0xFB923C, 0xEF4444, 0xA855F7]
+    self.ilab = ["Temperatur", "Luftfeuchte", "CO2 ppm", "TVOC ppb", "PM2.5 µg/m³"]
+    self.stale_s = store.get("stale") * 60
+    self.dots_ms = store.get("dots_s") * 1000
+    self.item_ms = store.get("item_s") * 1000
+    # last known values survive a reboot; fall back to a fresh start on anything unexpected
+    self.val = store.get("v")
+    if !isinstance(self.val, list) || size(self.val) != 5 self.val = [nil, nil, nil, nil, nil] end
+    self.score = num(store.get("score"))
+    self.seen = num(store.get("seen"), 0)
+    self.dim = false
+    self.page = 0
+    self.t0 = 0
+    self.recompute()
+  end
+
+  def level(i, v)
+    if v == nil return 0 end
+    var t = self.th[i]
+    if !self.sym[i]
+      return v < t[0] ? 1 : v < t[1] ? 2 : v < t[2] ? 3 : v < t[3] ? 4 : 5
+    end
+    # symmetric scale: [low_bad, low_ok, high_ok, high_bad]
+    if v >= t[1] && v <= t[2] return 1 end
+    if (v >= t[0] && v < t[1]) || (v > t[2] && v <= t[3]) return 2 end
+    if v < t[0]
+      var ls = t[1] - t[0]
+      return v >= t[0] - ls ? 3 : v >= t[0] - 2 * ls ? 4 : 5
+    end
+    var hs = t[3] - t[2]
+    return v <= t[3] + hs ? 3 : v <= t[3] + 2 * hs ? 4 : 5
+  end
+
+  # Builds everything draw() paints, so draw() allocates nothing.
+  def recompute()
+    var g = 0x888888
+    var grey = height() >= 16 ? 0x606060 : 0x303030   # stale values, kept apart from unlit dots
+    var short = ["T ", "H ", "CO2 ", "VOC ", "PM "]
+    var units = ["°", "%", "", "", ""]
+    self.dotc = self.dim ? [grey, grey, grey, grey, grey] : self.pal
+    var s = self.score
+    var sl = s == nil ? 0 : s >= 80 ? 1 : s >= 60 ? 2 : s >= 40 ? 3 : s >= 20 ? 4 : 5
+    self.stxt = s == nil ? "--" : str(min(round(s), 99))
+    self.scol = sl == 0 ? g : self.dotc[sl - 1]
+    self.lvl = []
+    # the score already sits next to the bars, so the value page shows only the sensors
+    self.ival = []
+    self.icol = []
+    self.ishort = []
+    for i : 0 .. 4
+      var v = self.val[i]
+      var l = self.level(i, v)
+      self.lvl.push(l)
+      # temperature keeps one decimal, everything else is whole numbers
+      var vs = v == nil ? "--" : (i == 0 ? str(round(v, 1)) : str(round(v))) + units[i]
+      var c = l == 0 ? g : self.dotc[l - 1]
+      self.ival.push(vs)
+      self.icol.push(c)
+      self.ishort.push([[short[i], g], [vs, c]])
+    end
+  end
+
+  def on_msg(topic, payload)
+    var parts = string.split(topic, "/")
+    var k = parts[-1]
+    var v = num(payload)              # "unavailable" and friends become nil
+    if k == "score"
+      self.score = v
+      store.set("score", v)
+    else
+      var i = nil
+      for j : 0 .. 4
+        if self.keys[j] == k i = j end
+      end
+      if i == nil return end
+      self.val[i] = v
+      store.set("v", self.val)
+    end
+    var now = epoch_ms()
+    if now >= 0
+      self.seen = now / 1000
+      store.set("seen", self.seen)
+    end
+    self.dim = false
+    self.recompute()
+  end
+
+  def setup()
+    mqtt.subscribe(store.get("base") + "/+", / t, p -> self.on_msg(t, p))
+  end
+
+  def loop()
+    var now = epoch_ms()
+    if now < 0 || self.stale_s <= 0 || self.seen <= 0 return end
+    var d = now / 1000 - self.seen > self.stale_s
+    if d != self.dim
+      self.dim = d
+      self.recompute()
+    end
+  end
+
+  def should_show()
+    return self.score != nil
+  end
+
+  def duration()
+    return self.page == 0 ? self.dots_ms : 5 * self.item_ms
+  end
+
+  def on_show()
+    self.t0 = now_ms()
+  end
+
+  def on_hide()
+    self.page = 1 - self.page         # alternate dot view and value view per turn
+  end
+
+  def draw()
+    clear()
+    var big = height() >= 16
+    if self.page == 1
+      # one value at a time: label above, large coloured value below
+      var n = (now_ms() - self.t0) / self.item_ms % 5
+      if big
+        text((width() - text_ink_width(self.ilab[n])) / 2, 6, self.ilab[n], 0x888888)
+        font("large")
+        text((width() - text_ink_width(self.ival[n])) / 2, 15, self.ival[n], self.icol[n])
+      else
+        text((width() - text_ink_width(self.ishort[n])) / 2, 6, self.ishort[n])
+      end
+      return
+    end
+    # score on the right: large and centred in the columns after the bars on 16 rows,
+    # small 3x5 digits right-aligned on 8 rows
+    if big
+      font("large")
+      text(38 + (width() - 38 - text_ink_width(self.stxt)) / 2, 13, self.stxt, self.scol)   # flush with the bars' bottom row
+    else
+      text(width() - 1 - text_ink_width(self.stxt), 6, self.stxt, self.scol)
+    end
+    # five bars of five dots, bottom = good, more lit = worse (Awair style)
+    var x0 = 1
+    var step = big ? 8 : 4
+    var dw = big ? 4 : 2
+    var dh = big ? 2 : 1
+    var pitch = big ? 3 : 1
+    var y0 = big ? 12 : 5
+    # unlit dots stay faintly visible; the TC002 panel swallows #101010 after gamma, so it gets more
+    var off = big ? 0x282828 : 0x101010
+    for i : 0 .. 4
+      var l = self.lvl[i]
+      for d : 0 .. 4
+        rect_fill(x0 + i * step, y0 - d * pitch, dw, dh, d < l ? self.dotc[d] : off)
+      end
+    end
+  end
+end
+
+return Awair()

@@ -1,0 +1,56 @@
+# =====================================================================
+# Awtrix Awair Element Companion — AWTRIX NG publisher
+# =====================================================================
+#
+# Feeds the Berry app berry/Awair.ax. Publishes every Awair value as a
+# retained MQTT message to awair/<room>/<key>, so a clock gets all values
+# the moment it (re)connects. Paste into automations.yaml, or create a new
+# automation in the UI and paste this (without the leading "- ") in YAML mode.
+#
+# Keys the app reads: score, temp, hum, co2, voc, pm25.
+# More rooms: add their six entities to the trigger and to the topics map.
+#
+# =====================================================================
+
+- id: awair_mqtt_awtrix_ng
+  alias: "Awair → MQTT (Awtrix NG)"
+  description: >-
+    Publishes the Awair Element values as retained MQTT messages to
+    awair/<room>/<key> for the AWTRIX NG Berry app "Awair".
+  mode: queued
+  max: 30
+  triggers:
+    - trigger: state
+      id: change
+      entity_id:
+        - sensor.awair_element_score
+        - sensor.awair_element_temperature
+        - sensor.awair_element_humidity
+        - sensor.awair_element_co2
+        - sensor.awair_element_voc
+        - sensor.awair_element_pm25
+    # Republish everything after a restart and every 15 minutes, so the
+    # retained values never go stale while HA is running.
+    - trigger: homeassistant
+      event: start
+      id: all
+    - trigger: time_pattern
+      minutes: "/15"
+      id: all
+  actions:
+    - variables:
+        topics:
+          sensor.awair_element_score: awair/living_room/score
+          sensor.awair_element_temperature: awair/living_room/temp
+          sensor.awair_element_humidity: awair/living_room/hum
+          sensor.awair_element_co2: awair/living_room/co2
+          sensor.awair_element_voc: awair/living_room/voc
+          sensor.awair_element_pm25: awair/living_room/pm25
+    - repeat:
+        for_each: "{{ [trigger.entity_id] if trigger.id == 'change' else topics.keys() | list }}"
+        sequence:
+          - action: mqtt.publish
+            data:
+              topic: "{{ topics[repeat.item] }}"
+              payload: "{{ states(repeat.item) }}"
+              retain: true

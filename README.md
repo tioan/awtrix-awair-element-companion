@@ -31,6 +31,32 @@ A Home Assistant **automation blueprint** that registers two custom apps on the 
 
 Each sensor's dot bar uses the Awair Element style: colors are fixed by position (🟢 → 🟡 → 🟠 → 🔴 → 🟣 from bottom to top), more lit dots = worse. The score number and the progress bar share the score's severity color. In the scrolling text, labels stay gray and only the values are tinted, so the eye reads "what changed" first.
 
+> Running **AWTRIX NG**? The blueprint below speaks the AWTRIX 3 API and does not work there. Use the [Berry app](#awtrix-ng--berry-app) instead.
+
+## AWTRIX NG — Berry app
+
+[`berry/Awair.ax`](berry/Awair.ax) is the same visualisation as a native [AWTRIX NG](https://blueforcer.github.io/awtrix-ng/) script. It runs on the clock itself, so it survives reboots (pushed apps on NG do not) and needs no blueprint.
+
+- **Two pages per turn:** the dot bars with the score, then one value at a time (label above, value below, tinted by severity).
+- **Adapts to the panel:** a 32×8 layout for the Ulanzi TC001 and a 52×16 layout for the Ulanzi TC002. On 16 rows the score sits large to the right of the bars.
+- **Survives a reboot:** the last values are kept on the clock and shown immediately after it boots; with no new value for a while (default 30 min) everything turns grey.
+- **Fed by MQTT:** Home Assistant publishes each value retained to `<topic>/score`, `temp`, `hum`, `co2`, `voc`, `pm25`; the app subscribes to `<topic>/+`.
+
+### Install
+
+1. In Home Assistant, add the publisher automation from [`examples/awtrix-ng-mqtt-publisher.yaml`](examples/awtrix-ng-mqtt-publisher.yaml) and adjust the six entities and the topic (`awair/<room>`).
+2. On the clock: web UI → **Scripts** → new script named `Awair`, paste `berry/Awair.ax`, save. Or with curl:
+
+   ```bash
+   curl -X PUT "http://<AWTRIX_IP>/api/v1/apps/script/Awair" \
+     -H 'Content-Type: text/plain' --data-binary @berry/Awair.ax
+   ```
+
+   The reply must contain `"error":null`.
+3. Web UI → **Apps** → gear on `Awair`: set **MQTT-Topic** to the topic from step 1. Durations, the grey-out time and the thresholds are there too.
+
+The settings labels are in German (`Dauer Balken`, `Grau nach`, `Grenzwerte` …); the colours are the Awair palette from the blueprint defaults.
+
 ## Requirements
 
 - An **Awtrix 3** display (Ulanzi TC001 or DIY) with MQTT enabled
